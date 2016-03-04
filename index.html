@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+  <head>
+    <link href="bootstrap.min.css" rel="stylesheet" />
+    <style>
+      body {
+        background-color: #e9e9e9;
+      }
+
+      rect.bordered {
+        stroke: #E6E6E6;
+        stroke-width:1px;
+      }
+
+      text {
+        font-size: 9pt;
+        font-family: Consolas, courier;
+        /*fill: #aaa;*/
+      }
+
+      text.axis-workweek {
+        fill: #000;
+      }
+
+      text.axis-worktime {
+        fill: #000;
+      }
+
+      .navbar-inverse {
+        background-color: #e0e0e0;
+      }
+
+      #chart {
+        width: 870px;
+      }
+      #sidebar {
+        position: fixed;
+        top: 100px;
+        left: 860px;
+        width: 320px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="navbar-header">
+        <a class="navbar-brand" href="#">SECOND SOURCE</a>
+      </div>
+    </nav>
+
+    <div id="sidebar">
+      <h3>Portfolio</h3>
+      <div id="portfolio"></div>
+      <h3>Department / Agency</h3>
+      <div id="department_agency"></div>
+      <h3>Outcome</h3>
+      <div id="outcome"></div>
+      <h3>Program</h3>
+      <div id="program"></div>
+      <h3 Expense Type></h3>
+      <div id="expense_type"></div>
+      <h3>Appropriation type</h3>
+      <div id="appropriation_type"></div>
+      <h3>Description</h3>
+      <div id="description"></div>
+    </div>
+
+    <div id="chart"></div>
+
+    <script type="text/javascript">
+      const d3 = require('d3');
+      var margin = { top: 100, right: 0, bottom: 100, left: 30 },
+          width = 840,
+          gridSize = 150,
+          height = (302 * gridSize / 4) + 100 - margin.top - margin.bottom,
+          buckets = 9,
+          colors = ["#D50000", "#D83030", "#DB4343", "#E35454", "#FFFFFF", "#AAF0A5", "#79CC72", "#3BB832", "#0E9D03"],
+          years = ["2014-15", "2015-16", "2016-17", "2017-18"];
+
+      var svg = d3.select("#chart").append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      var yearLabels = svg.selectAll(".yearLabel")
+          .data(years)
+          .enter().append("text")
+            .text(function(d) { return d; })
+            .attr("x", function(d, i) { return i * gridSize + 200; })
+            .attr("y", 0)
+            .style("text-anchor", "middle")
+            .attr("transform", "translate(" + gridSize / 2 + ", -6)")
+            .attr("class", function(d, i) { return ((i >= 7 && i <= 16) ? "yearLabel mono axis axis-worktime" : "yearLabel mono axis"); });
+
+      d3.csv('budget.csv',
+        function(d) {
+          return {
+            id: +d["Id"],
+            year1_raw: +d["2014-15"],
+            year1_perc: +d["2014-15%"],
+            year2_raw: +d["2015-16"],
+            year2_perc: +d["2015-16%"],
+            year3_raw: +d["2016-17"],
+            year3_perc: +d["2016-17%"],
+            year4_raw: +d["2017-18"],
+            year4_perc: +d["2017-18%"],
+            appropriation_type: d["Appropriation type"],
+            department_agency: d["Department/Agency"],
+            description: d["Description"],
+            expense_type: d["Expense type"],
+            outcome: d["Outcome"],
+            portfolio: d["Portfolio"],
+            program: d["Program"]
+          };
+        },
+        function(error, data) {
+          var colorScale = d3.scale.quantile()
+              .domain([-1, -0.5, -0.1, -0.03, 0, 0.03, 0.1, 0.5, 1])
+              .range(colors);
+
+          var cards = svg.selectAll(".hour")
+              .data(data, function(d) { return d.id;});
+
+          cards.append("title");
+
+          var rows = cards.enter().append("g");
+
+          rows.on('mouseover', function(d) {
+            d3.selectAll("#portfolio").html(d.portfolio);
+            d3.selectAll("#department_agency").html(d.department_agency);
+            d3.selectAll("#outcome").html(d.outcome);
+            d3.selectAll("#program").html(d.program);
+            d3.selectAll("#expense_type").html(d.expense_type);
+            d3.selectAll("#appropriation_type").html(d.appropriation_type);
+            d3.selectAll("#description").html(d.description);
+          });
+
+          for (var i = 0; i < 4; i++) {
+            rows.append("rect")
+              .attr("x", function(d) { return i * gridSize + 200; })
+              .attr("y", function(d) { return (d.id * gridSize ) / 4; })
+              .attr("class", "hour bordered")
+              .attr("width", gridSize)
+              .attr("height", gridSize / 4)
+              .style("fill", colors[4])
+              .transition().duration(2000).style("fill", function(d) { return colorScale(d["year" + (i + 1) + "_perc"])});
+
+            rows.append("text")
+              .attr("x", function(d) { return ((0.5 + i) * gridSize) + 200; })
+              .attr("y", function(d) { return (d.id * gridSize ) / 4 + (gridSize / 8); })
+              .style("text-anchor", "middle")
+              .text(function(d) { return "$" + (d["year" + (i + 1) + "_raw"] / 100) + "m | " + (parseFloat(Math.round(d["year" + (i + 1) + "_perc"] * 100 * 100) / 100).toFixed(2)) + "%"; });
+          }
+
+          rows.append("text")
+            .attr("x", 0)
+            .attr("y", function(d) { return ((d.id * gridSize ) / 4) + (gridSize / 8); })
+            .text(function(d) {
+              if (d.description.length > 25)
+                return d.description.substring(0,25) + '...';
+              else
+                return d.description;
+            })
+            .attr("title", function(d) { return d.description; });
+
+          cards.exit().remove();
+
+      });
+
+    </script>
+  </body>
+</html>
